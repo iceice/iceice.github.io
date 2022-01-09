@@ -1,0 +1,661 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.0.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/all.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"deepcooking.cn","root":"/","scheme":"Gemini","version":"7.8.0","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":true,"scrollpercent":true},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":"valine","storage":true,"lazyload":false,"nav":null,"activeClass":"valine"},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":true,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}},"path":"search.xml"};
+  </script>
+
+  <meta name="description" content="求一个字符串的最长回文子串">
+<meta property="og:type" content="article">
+<meta property="og:title" content="5. Longest Palindromic Substring 最长回文子串">
+<meta property="og:url" content="https://deepcooking.cn/posts/3070749106/index.html">
+<meta property="og:site_name" content="Cooker&#39;s Blog">
+<meta property="og:description" content="求一个字符串的最长回文子串">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://deepcooking.cn/posts/3070749106/Manacher1.png">
+<meta property="og:image" content="https://deepcooking.cn/posts/3070749106/Manacher2.png">
+<meta property="article:published_time" content="2018-01-05T10:02:30.000Z">
+<meta property="article:modified_time" content="2020-04-19T01:30:55.000Z">
+<meta property="article:author" content="Cooker">
+<meta property="article:tag" content="String">
+<meta property="article:tag" content="Medium">
+<meta property="article:tag" content="Palindromic">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://deepcooking.cn/posts/3070749106/Manacher1.png">
+
+<link rel="canonical" href="https://deepcooking.cn/posts/3070749106/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome : false,
+    isPost : true,
+    lang   : 'zh-CN'
+  };
+</script>
+
+  <title>5. Longest Palindromic Substring 最长回文子串 | Cooker's Blog</title>
+  
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <span class="logo-line-before"><i></i></span>
+      <h1 class="site-title">Cooker's Blog</h1>
+      <span class="logo-line-after"><i></i></span>
+    </a>
+      <p class="site-subtitle" itemprop="description">Cooking & Coding</p>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+
+<nav class="site-nav">
+  <ul id="menu" class="main-menu menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-user fa-fw"></i>关于</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a>
+
+  </li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+        <div class="search-header">
+  <span class="search-icon">
+    <i class="fa fa-search"></i>
+  </span>
+  <div class="search-input-container">
+    <input autocomplete="off" autocapitalize="off"
+           placeholder="搜索..." spellcheck="false"
+           type="search" class="search-input">
+  </div>
+  <span class="popup-btn-close">
+    <i class="fa fa-times-circle"></i>
+  </span>
+</div>
+<div id="search-result">
+  <div id="no-result">
+    <i class="fa fa-spinner fa-pulse fa-5x fa-fw"></i>
+  </div>
+</div>
+
+    </div>
+  </div>
+
+</div>
+    </header>
+
+    
+
+  <a href="https://github.com/iceice" class="github-corner" title="Follow me on GitHub" aria-label="Follow me on GitHub" rel="noopener" target="_blank"><svg width="80" height="80" viewBox="0 0 250 250" aria-hidden="true"><path d="M0,0 L115,115 L130,115 L142,142 L250,250 L250,0 Z"></path><path d="M128.3,109.0 C113.8,99.7 119.0,89.6 119.0,89.6 C122.0,82.7 120.5,78.6 120.5,78.6 C119.2,72.0 123.4,76.3 123.4,76.3 C127.3,80.9 125.5,87.3 125.5,87.3 C122.9,97.6 130.6,101.9 134.4,103.2" fill="currentColor" style="transform-origin: 130px 106px;" class="octo-arm"></path><path d="M115.0,115.0 C114.9,115.1 118.7,116.5 119.8,115.4 L133.7,101.6 C136.9,99.2 139.9,98.4 142.2,98.6 C133.8,88.0 127.5,74.4 143.8,58.0 C148.5,53.4 154.0,51.2 159.7,51.0 C160.3,49.4 163.2,43.6 171.4,40.1 C171.4,40.1 176.1,42.5 178.8,56.2 C183.1,58.6 187.2,61.8 190.9,65.4 C194.5,69.0 197.7,73.2 200.1,77.6 C213.8,80.2 216.3,84.9 216.3,84.9 C212.7,93.1 206.9,96.0 205.4,96.6 C205.1,102.4 203.0,107.8 198.3,112.5 C181.9,128.9 168.3,122.5 157.7,114.1 C157.9,116.9 156.7,120.9 152.7,124.9 L141.0,136.5 C139.8,137.7 141.6,141.9 141.8,141.8 Z" fill="currentColor" class="octo-body"></path></svg></a>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content post posts-expand">
+            
+
+    
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://deepcooking.cn/posts/3070749106/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.jpg">
+      <meta itemprop="name" content="Cooker">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Cooker's Blog">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          5. Longest Palindromic Substring 最长回文子串
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="far fa-calendar"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2018-01-05 18:02:30" itemprop="dateCreated datePublished" datetime="2018-01-05T18:02:30+08:00">2018-01-05</time>
+            </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="far fa-folder"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/LeetCode/" itemprop="url" rel="index"><span itemprop="name">LeetCode</span></a>
+                </span>
+            </span>
+
+          
+  
+  <span class="post-meta-item">
+    
+      <span class="post-meta-item-icon">
+        <i class="far fa-comment"></i>
+      </span>
+      <span class="post-meta-item-text">Valine：</span>
+    
+    <a title="valine" href="/posts/3070749106/#valine-comments" itemprop="discussionUrl">
+      <span class="post-comments-count valine-comment-count" data-xid="/posts/3070749106/" itemprop="commentCount"></span>
+    </a>
+  </span>
+  
+  <br>
+            <span class="post-meta-item" title="本文字数">
+              <span class="post-meta-item-icon">
+                <i class="far fa-file-word"></i>
+              </span>
+                <span class="post-meta-item-text">本文字数：</span>
+              <span>2.9k</span>
+            </span>
+            <span class="post-meta-item" title="阅读时长">
+              <span class="post-meta-item-icon">
+                <i class="far fa-clock"></i>
+              </span>
+                <span class="post-meta-item-text">阅读时长 &asymp;</span>
+              <span>3 分钟</span>
+            </span>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <blockquote>
+<p>求一个字符串的最长回文子串</p>
+</blockquote>
+<span id="more"></span>
+<p><strong>Example :</strong></p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">Input: &quot;babad&quot;</span><br><span class="line">Output: &quot;bab&quot;</span><br><span class="line">Note: &quot;aba&quot; is also a valid answer.</span><br></pre></td></tr></table></figure>
+<h3 id="暴力解法">1. 暴力解法</h3>
+<p>最长的回文子串，只需要从每个位置 i 开始看它的左右两边的字符是否相等</p>
+<p>但是，由于奇偶的问题，我们需要考虑两种情况</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">a b b a</span><br><span class="line">0 1 2 3		假如当前下标在1，奇数情况需要考虑abb；偶数情况需要考虑abba</span><br></pre></td></tr></table></figure>
+<p>具体做法请看代码：</p>
+<h4 id="代码">1.1. 代码</h4>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">class</span> <span class="title">Solution</span> &#123;</span></span><br><span class="line"> <span class="keyword">public</span>:</span><br><span class="line">  <span class="function">string <span class="title">longestPalindrome</span><span class="params">(string s)</span> </span>&#123;</span><br><span class="line">    <span class="comment">// MAX表示最大长度，index表示中心坐标；例如abba，index = 1</span></span><br><span class="line">    <span class="keyword">int</span> len = s.<span class="built_in">size</span>(), MAX = <span class="number">0</span>, index = <span class="number">-1</span>;</span><br><span class="line">    <span class="keyword">for</span> (<span class="keyword">int</span> i = <span class="number">0</span>; i &lt; len; i++) &#123;</span><br><span class="line">      <span class="keyword">int</span> temp = <span class="number">1</span>;</span><br><span class="line">      <span class="comment">// 先以当前点为中心，看它的奇数情况</span></span><br><span class="line">      <span class="keyword">for</span> (<span class="keyword">int</span> j = <span class="number">1</span>; (i - j &gt;= <span class="number">0</span>) &amp;&amp; (i + j &lt; len); j++) &#123;</span><br><span class="line">        <span class="keyword">if</span> (s[i - j] != s[i + j]) <span class="keyword">break</span>;</span><br><span class="line">        temp += <span class="number">2</span>;</span><br><span class="line">      &#125;</span><br><span class="line">      <span class="keyword">if</span> (temp &gt; MAX) &#123;</span><br><span class="line">        MAX = temp;</span><br><span class="line">        index = i;</span><br><span class="line">      &#125;</span><br><span class="line">      <span class="comment">// 再以当前点为中心，看它的偶数情况</span></span><br><span class="line">      temp = <span class="number">0</span>;</span><br><span class="line">      <span class="keyword">for</span> (<span class="keyword">int</span> j = <span class="number">0</span>; (i - j &gt;= <span class="number">0</span>) &amp;&amp; (i + j + <span class="number">1</span> &lt; len); j++) &#123;</span><br><span class="line">        <span class="keyword">if</span> (s[i - j] != s[i + j + <span class="number">1</span>]) <span class="keyword">break</span>;</span><br><span class="line">        temp += <span class="number">2</span>;</span><br><span class="line">      &#125;</span><br><span class="line">      <span class="keyword">if</span> (temp &gt; MAX) &#123;</span><br><span class="line">        MAX = temp;</span><br><span class="line">        index = i;</span><br><span class="line">      &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">int</span> k = <span class="number">0</span>;</span><br><span class="line">    <span class="keyword">if</span> (MAX % <span class="number">2</span>) &#123;</span><br><span class="line">      <span class="keyword">return</span> s.<span class="built_in">substr</span>(index - MAX / <span class="number">2</span>, MAX);</span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">      <span class="keyword">return</span> s.<span class="built_in">substr</span>(index - MAX / <span class="number">2</span> + <span class="number">1</span>, MAX);</span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+<h4 id="结果">1.2. 结果</h4>
+<p>Runtime: 28 ms, faster than 67.12% of C++ online submissions for Longest Palindromic Substring. Memory Usage: 8.6 MB, less than 100.00% of C++ online submissions for Longest Palindromic Substring.</p>
+<h3 id="马拉车manacher算法">2. 马拉车(Manacher)算法</h3>
+<p>这个算法，把 <span class="math inline">\(O(n^2)\)</span> 的时间复杂度，降到了逆天的 <span class="math inline">\(O(n)\)</span> 级别</p>
+<p>首先，上面让我们棘手的奇偶问题，被这位大神用了一个巧妙的办法解决了：在字符串中每个字符的两边插入一个字符“#”。</p>
+<blockquote>
+<p>abba 插入字符#变为 # a # b # b # a #</p>
+</blockquote>
+<p>一个长度为4的字符串，摇身一变变成了长度为9的字符串；2*N + 1 永远为一个奇数！！！</p>
+<p>然后，我们使用一个数组p[i]来记录以字符s[i]为中心的最长回文子串的半径（包括s[i]本身）</p>
+<blockquote>
+<p>S：# a # b # b # a #</p>
+<p>p：1 2 1 2 5 2 1 2 1</p>
+</blockquote>
+<p>p的最大值是5，我们发现 5-1 = 4 正好是原字符串满足回文的最大长度（具体证明方法略过）</p>
+<blockquote>
+<p>maxLen = max(p[i]) - 1</p>
+</blockquote>
+<p>我们知道的最大长度，所以我们只要求出取得最大长度的字符串的起始位置就完美的解决问题啦，马拉车算法的起始位置的公式为：</p>
+<blockquote>
+<p>begin = ( max(p[i])的下标 i - 半径p[i] ) / 2</p>
+</blockquote>
+<p>但是，使用上面的例子，就会发现 4 - 5 = -1 ，这个马拉车算法出错了？非也，针对这种边界情况，我们还需要在首尾添加两个字符来避免越界，通常在首部添加 “$”，由于尾部有 “\0” 所以可以不添加。</p>
+<blockquote>
+<p>S：$ # a # b # b # a #</p>
+<p>p：1 1 2 1 2 5 2 1 2 1</p>
+</blockquote>
+<p>这时候，begin = (5 - 5) / 2 = 0。所以，最后问题变成了如何<strong>求p数组</strong></p>
+<h4 id="求解p数组">2.1 求解p数组</h4>
+<p>我们再一次观察abba这个例子，可以发现不光S是对称的，P也是对称的。根据对称原则，计算数组p的运算量将会直接缩短了一半！！！</p>
+<p>Manacher算法增加两个辅助变量id和mx，其中id表示最大回文子串中心的位置，mx则为id+P[id]，即最大回文子串的边界。另外 j 是 i 关于id的对称点。</p>
+<p><img src="Manacher1.png" alt="Manacher1" /></p>
+<p>当 mx - i &gt; P[j] 的时候，以S[j]为中心的回文子串包含在以S[id]为中心的回文子串中，由于 i 和 j 对称，以S[i]为中心的回文子串必然包含在以S[id]为中心的回文子串中，所以必有 P[i] = P[j]。</p>
+<p>当 P[j] &gt;= mx - i 的时候，以S[j]为中心的回文子串不一定完全包含于以S[id]为中心的回文子串中，但是基于对称性可知，下图中两个绿框所包围的部分是相同的，也就是说以S[i]为中心的回文子串，其向右至少会扩张到mx的位置，也就是说 P[i] = mx - i。至于mx之后的部分是否对称，就只能老老实实去匹配了。</p>
+<p><img src="Manacher2.png" alt="Manacher2" /></p>
+<p>对于 mx &lt;= i 的情况，无法对 P[i]做更多的假设，只能P[i] = 1，然后再去匹配了。</p>
+<h4 id="代码-1">2.2. 代码</h4>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">class</span> <span class="title">Solution</span> &#123;</span></span><br><span class="line"> <span class="keyword">public</span>:</span><br><span class="line">  <span class="function">string <span class="title">longestPalindrome</span><span class="params">(string s)</span> </span>&#123;</span><br><span class="line">    <span class="comment">// Insert &#x27;#&#x27;</span></span><br><span class="line">    string result = <span class="string">&quot;$#&quot;</span>;</span><br><span class="line">    <span class="keyword">int</span> length = s.<span class="built_in">size</span>();</span><br><span class="line">    <span class="keyword">for</span> (<span class="keyword">int</span> i = <span class="number">0</span>; i &lt; length; ++i) &#123;</span><br><span class="line">      result += s[i];</span><br><span class="line">      result += <span class="string">&quot;#&quot;</span>;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="comment">// calculate p</span></span><br><span class="line">    <span class="function">vector&lt;<span class="keyword">int</span>&gt; <span class="title">p</span><span class="params">(result.size(), <span class="number">0</span>)</span></span>;</span><br><span class="line">    <span class="keyword">int</span> mx = <span class="number">0</span>, id = <span class="number">0</span>, maxP = <span class="number">0</span>, index = <span class="number">0</span>;</span><br><span class="line">    <span class="keyword">for</span> (<span class="keyword">int</span> i = <span class="number">1</span>; i &lt; result.<span class="built_in">size</span>(); ++i) &#123;</span><br><span class="line">      p[i] = mx &gt; i ? <span class="built_in">min</span>(p[<span class="number">2</span> * id - i], mx - i) : <span class="number">1</span>;</span><br><span class="line">      <span class="keyword">while</span> (result[i + p[i]] == result[i - p[i]]) ++p[i];</span><br><span class="line">      <span class="keyword">if</span> (p[i] + i &gt; mx) &#123;</span><br><span class="line">        mx = p[i] + i;</span><br><span class="line">        id = i;</span><br><span class="line">      &#125;</span><br><span class="line">      <span class="keyword">if</span> (p[i] &gt; maxP) &#123;</span><br><span class="line">        maxP = p[i];</span><br><span class="line">        index = i;</span><br><span class="line">      &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">return</span> s.<span class="built_in">substr</span>((index - maxP) / <span class="number">2</span>, maxP - <span class="number">1</span>);</span><br><span class="line">  &#125;</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+<h4 id="结果-1">2.3. 结果</h4>
+<p>Runtime: 8 ms, faster than 100.00% of C++ online submissions for Longest Palindromic Substring. Memory Usage: 10.5 MB, less than 56.45% of C++ online submissions for Longest Palindromic Substring.</p>
+<p>再次膜拜大神，从20ms的时间复杂度直接优化到8ms</p>
+
+    </div>
+
+    
+    
+    
+
+      <div>
+    
+        <div style="text-align:center;color: #ccc;font-size:14px;">-------------本文已经结束 <i class="fa fa-paw"></i> 感谢您的阅读-------------</div>
+    
+</div>
+        <div class="reward-container">
+  <div>觉得文章对您有帮助，请我喝杯咖啡吧^_^</div>
+  <button onclick="var qr = document.getElementById('qr'); qr.style.display = (qr.style.display === 'none') ? 'block' : 'none';">
+    打赏
+  </button>
+  <div id="qr" style="display: none;">
+      
+      <div style="display: inline-block;">
+        <img src="/images/wechatpay.png" alt="Cooker 微信支付">
+        <p>微信支付</p>
+      </div>
+      
+      <div style="display: inline-block;">
+        <img src="/images/alipay.png" alt="Cooker 支付宝">
+        <p>支付宝</p>
+      </div>
+
+  </div>
+</div>
+
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/String/" rel="tag"># String</a>
+              <a href="/tags/Medium/" rel="tag"># Medium</a>
+              <a href="/tags/Palindromic/" rel="tag"># Palindromic</a>
+          </div>
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/posts/2726523652/" rel="prev" title="4. Median of Two Sorted Arrays 两个有序数组的中位数">
+      <i class="fa fa-chevron-left"></i> 4. Median of Two Sorted Arrays 两个有序数组的中位数
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/posts/2613885919/" rel="next" title="6. ZigZag Conversion 之字形转字符串">
+      6. ZigZag Conversion 之字形转字符串 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+
+
+          </div>
+          
+    <div class="comments" id="valine-comments"></div>
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let { activeClass } = CONFIG.comments;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E6%9A%B4%E5%8A%9B%E8%A7%A3%E6%B3%95"><span class="nav-text">1. 暴力解法</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#%E4%BB%A3%E7%A0%81"><span class="nav-text">1.1. 代码</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#%E7%BB%93%E6%9E%9C"><span class="nav-text">1.2. 结果</span></a></li></ol></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E9%A9%AC%E6%8B%89%E8%BD%A6manacher%E7%AE%97%E6%B3%95"><span class="nav-text">2. 马拉车(Manacher)算法</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#%E6%B1%82%E8%A7%A3p%E6%95%B0%E7%BB%84"><span class="nav-text">2.1 求解p数组</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#%E4%BB%A3%E7%A0%81-1"><span class="nav-text">2.2. 代码</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#%E7%BB%93%E6%9E%9C-1"><span class="nav-text">2.3. 结果</span></a></li></ol></li></ol></div>
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Cooker"
+      src="/images/avatar.jpg">
+  <p class="site-author-name" itemprop="name">Cooker</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">87</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">7</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">50</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author motion-element">
+      <span class="links-of-author-item">
+        <a href="https://github.com/iceice" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;iceice" rel="noopener" target="_blank"><i class="fab fa-github fa-fw"></i></a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:liyansong.cs@gmail.com" title="E-Mail → mailto:liyansong.cs@gmail.com" rel="noopener" target="_blank"><i class="fa fa-envelope fa-fw"></i></a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="https://weibo.com/6362780216" title="Weibo → https:&#x2F;&#x2F;weibo.com&#x2F;6362780216" rel="noopener" target="_blank"><i class="fab fa-weibo fa-fw"></i></a>
+      </span>
+  </div>
+
+
+
+      </div>
+        <div class="back-to-top motion-element">
+          <i class="fa fa-arrow-up"></i>
+          <span>0%</span>
+        </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+        
+
+<div class="copyright">
+  
+  &copy; 2018 – 
+  <span itemprop="copyrightYear">2022</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">Cooker</span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Gemini</a> 强力驱动
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/pisces.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+  
+<script src="/js/local-search.js"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+      
+
+<script>
+  if (typeof MathJax === 'undefined') {
+    window.MathJax = {
+      loader: {
+        source: {
+          '[tex]/amsCd': '[tex]/amscd',
+          '[tex]/AMScd': '[tex]/amscd'
+        }
+      },
+      tex: {
+        inlineMath: {'[+]': [['$', '$']]},
+        tags: 'ams'
+      },
+      options: {
+        renderActions: {
+          findScript: [10, doc => {
+            document.querySelectorAll('script[type^="math/tex"]').forEach(node => {
+              const display = !!node.type.match(/; *mode=display/);
+              const math = new doc.options.MathItem(node.textContent, doc.inputJax[0], display);
+              const text = document.createTextNode('');
+              node.parentNode.replaceChild(text, node);
+              math.start = {node: text, delim: '', n: 0};
+              math.end = {node: text, delim: '', n: 0};
+              doc.math.push(math);
+            });
+          }, '', false],
+          insertedScript: [200, () => {
+            document.querySelectorAll('mjx-container').forEach(node => {
+              let target = node.parentNode;
+              if (target.nodeName.toLowerCase() === 'li') {
+                target.parentNode.classList.add('has-jax');
+              }
+            });
+          }, '', false]
+        }
+      }
+    };
+    (function () {
+      var script = document.createElement('script');
+      script.src = '//cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js';
+      script.defer = true;
+      document.head.appendChild(script);
+    })();
+  } else {
+    MathJax.startup.document.state(0);
+    MathJax.texReset();
+    MathJax.typeset();
+  }
+</script>
+
+    
+
+  
+
+
+<script>
+NexT.utils.loadComments(document.querySelector('#valine-comments'), () => {
+  NexT.utils.getScript('https://cdn.jsdelivr.net/npm/valine@1.4.14/dist/Valine.min.js', () => {
+    var GUEST = ['nick', 'mail', 'link'];
+    var guest = 'nick,mail,link';
+    guest = guest.split(',').filter(item => {
+      return GUEST.includes(item);
+    });
+    new Valine({
+      el         : '#valine-comments',
+      verify     : false,
+      notify     : true,
+      appId      : 'nSgEPjKtieD5Gy2XGaCj8JEy-gzGzoHsz',
+      appKey     : 'NfeWK6zro2GzDuf1i67H7UyU',
+      placeholder: "Just go go",
+      avatar     : 'mm',
+      meta       : guest,
+      pageSize   : '10' || 10,
+      visitor    : false,
+      lang       : '' || 'zh-cn',
+      path       : location.pathname,
+      recordIP   : false,
+      serverURLs : ''
+    });
+  }, window.Valine);
+});
+</script>
+
+</body>
+</html>

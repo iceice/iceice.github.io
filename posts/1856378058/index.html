@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.0.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/all.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"deepcooking.cn","root":"/","scheme":"Gemini","version":"7.8.0","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":true,"scrollpercent":true},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":"valine","storage":true,"lazyload":false,"nav":null,"activeClass":"valine"},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":true,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}},"path":"search.xml"};
+  </script>
+
+  <meta name="description" content="select，poll，epoll都是IO多路复用的机制。I&#x2F;O多路复用就通过一种机制，可以监视多个描述符，一旦某个描述符就绪（一般是读就绪或者写就绪），能够通知程序进行相应的读写操作。但 select，poll，epoll本质上都是同步I&#x2F;O，因为他们都需要在读写事件就绪后自己负责进行读写，也就是说这个读写过程是阻塞的，而异步I&#x2F;O则无需自己负责进行读写，异步I&#x2F;O的实现会负责把数据从内核拷贝">
+<meta property="og:type" content="article">
+<meta property="og:title" content="浅析select、poll、epoll">
+<meta property="og:url" content="https://deepcooking.cn/posts/1856378058/index.html">
+<meta property="og:site_name" content="Cooker&#39;s Blog">
+<meta property="og:description" content="select，poll，epoll都是IO多路复用的机制。I&#x2F;O多路复用就通过一种机制，可以监视多个描述符，一旦某个描述符就绪（一般是读就绪或者写就绪），能够通知程序进行相应的读写操作。但 select，poll，epoll本质上都是同步I&#x2F;O，因为他们都需要在读写事件就绪后自己负责进行读写，也就是说这个读写过程是阻塞的，而异步I&#x2F;O则无需自己负责进行读写，异步I&#x2F;O的实现会负责把数据从内核拷贝">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://deepcooking.cn/posts/1856378058/1_k-PycQSwivn-jIoEhXsvxg.png">
+<meta property="og:image" content="https://deepcooking.cn/posts/1856378058/1_zwsANOj2UkICip9FhDzl_Q.png">
+<meta property="og:image" content="https://deepcooking.cn/posts/1856378058/1_Abjr5spvjK56w1p7PszWVw.jpeg">
+<meta property="og:image" content="https://deepcooking.cn/posts/1856378058/1_24HukCwzdkH0Vb8n-RHlFw.jpeg">
+<meta property="article:published_time" content="2019-06-18T13:28:05.000Z">
+<meta property="article:modified_time" content="2020-04-20T03:10:04.000Z">
+<meta property="article:author" content="Cooker">
+<meta property="article:tag" content="IO">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://deepcooking.cn/posts/1856378058/1_k-PycQSwivn-jIoEhXsvxg.png">
+
+<link rel="canonical" href="https://deepcooking.cn/posts/1856378058/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome : false,
+    isPost : true,
+    lang   : 'zh-CN'
+  };
+</script>
+
+  <title>浅析select、poll、epoll | Cooker's Blog</title>
+  
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <span class="logo-line-before"><i></i></span>
+      <h1 class="site-title">Cooker's Blog</h1>
+      <span class="logo-line-after"><i></i></span>
+    </a>
+      <p class="site-subtitle" itemprop="description">Cooking & Coding</p>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+
+<nav class="site-nav">
+  <ul id="menu" class="main-menu menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-user fa-fw"></i>关于</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a>
+
+  </li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+        <div class="search-header">
+  <span class="search-icon">
+    <i class="fa fa-search"></i>
+  </span>
+  <div class="search-input-container">
+    <input autocomplete="off" autocapitalize="off"
+           placeholder="搜索..." spellcheck="false"
+           type="search" class="search-input">
+  </div>
+  <span class="popup-btn-close">
+    <i class="fa fa-times-circle"></i>
+  </span>
+</div>
+<div id="search-result">
+  <div id="no-result">
+    <i class="fa fa-spinner fa-pulse fa-5x fa-fw"></i>
+  </div>
+</div>
+
+    </div>
+  </div>
+
+</div>
+    </header>
+
+    
+
+  <a href="https://github.com/iceice" class="github-corner" title="Follow me on GitHub" aria-label="Follow me on GitHub" rel="noopener" target="_blank"><svg width="80" height="80" viewBox="0 0 250 250" aria-hidden="true"><path d="M0,0 L115,115 L130,115 L142,142 L250,250 L250,0 Z"></path><path d="M128.3,109.0 C113.8,99.7 119.0,89.6 119.0,89.6 C122.0,82.7 120.5,78.6 120.5,78.6 C119.2,72.0 123.4,76.3 123.4,76.3 C127.3,80.9 125.5,87.3 125.5,87.3 C122.9,97.6 130.6,101.9 134.4,103.2" fill="currentColor" style="transform-origin: 130px 106px;" class="octo-arm"></path><path d="M115.0,115.0 C114.9,115.1 118.7,116.5 119.8,115.4 L133.7,101.6 C136.9,99.2 139.9,98.4 142.2,98.6 C133.8,88.0 127.5,74.4 143.8,58.0 C148.5,53.4 154.0,51.2 159.7,51.0 C160.3,49.4 163.2,43.6 171.4,40.1 C171.4,40.1 176.1,42.5 178.8,56.2 C183.1,58.6 187.2,61.8 190.9,65.4 C194.5,69.0 197.7,73.2 200.1,77.6 C213.8,80.2 216.3,84.9 216.3,84.9 C212.7,93.1 206.9,96.0 205.4,96.6 C205.1,102.4 203.0,107.8 198.3,112.5 C181.9,128.9 168.3,122.5 157.7,114.1 C157.9,116.9 156.7,120.9 152.7,124.9 L141.0,136.5 C139.8,137.7 141.6,141.9 141.8,141.8 Z" fill="currentColor" class="octo-body"></path></svg></a>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content post posts-expand">
+            
+
+    
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://deepcooking.cn/posts/1856378058/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.jpg">
+      <meta itemprop="name" content="Cooker">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Cooker's Blog">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          浅析select、poll、epoll
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="far fa-calendar"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2019-06-18 21:28:05" itemprop="dateCreated datePublished" datetime="2019-06-18T21:28:05+08:00">2019-06-18</time>
+            </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="far fa-folder"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Linux/" itemprop="url" rel="index"><span itemprop="name">Linux</span></a>
+                </span>
+            </span>
+
+          
+  
+  <span class="post-meta-item">
+    
+      <span class="post-meta-item-icon">
+        <i class="far fa-comment"></i>
+      </span>
+      <span class="post-meta-item-text">Valine：</span>
+    
+    <a title="valine" href="/posts/1856378058/#valine-comments" itemprop="discussionUrl">
+      <span class="post-comments-count valine-comment-count" data-xid="/posts/1856378058/" itemprop="commentCount"></span>
+    </a>
+  </span>
+  
+  <br>
+            <span class="post-meta-item" title="本文字数">
+              <span class="post-meta-item-icon">
+                <i class="far fa-file-word"></i>
+              </span>
+                <span class="post-meta-item-text">本文字数：</span>
+              <span>3.6k</span>
+            </span>
+            <span class="post-meta-item" title="阅读时长">
+              <span class="post-meta-item-icon">
+                <i class="far fa-clock"></i>
+              </span>
+                <span class="post-meta-item-text">阅读时长 &asymp;</span>
+              <span>3 分钟</span>
+            </span>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <blockquote>
+<p>select，poll，epoll都是IO多路复用的机制。I/O多路复用就通过一种机制，可以监视多个描述符，一旦某个描述符就绪（一般是读就绪或者写就绪），能够通知程序进行相应的读写操作。<strong>但 select，poll，epoll本质上都是同步I/O，因为他们都需要在读写事件就绪后自己负责进行读写，也就是说这个读写过程是阻塞的</strong>，而异步I/O则无需自己负责进行读写，异步I/O的实现会负责把数据从内核拷贝到用户空间。</p>
+</blockquote>
+<span id="more"></span>
+<h3 id="select">1. select</h3>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">int</span> <span class="title">select</span> <span class="params">(<span class="keyword">int</span> n, fd_set *readfds, fd_set *writefds, fd_set *exceptfds, struct timeval *timeout)</span></span>;</span><br></pre></td></tr></table></figure>
+<p>select 函数监视的文件描述符分3类，分别是writefds、readfds、和exceptfds。</p>
+<p>调用后select函数会阻塞，直到有描述符就绪（有数据 可读、可写、或者有except），或者超时函数返回。</p>
+<p>select的一个<strong>缺点</strong>在于单个进程能够监视的文件描述符的数量存在最大限制，在Linux上一般为1024，可以通过修改宏定义甚至重新编译内核的方式提升这一限制，但是这样也会造成效率的降低。</p>
+<p>fd_set是一个int型数组，大小为32，每一位都能与一打开的文件句柄建立联系，所以 32 * 32 = 1024</p>
+<blockquote>
+<p>select使用位域的方式来传递关心的文件描述符，位域就有最大长度，在Unix下是256，在Linux下是1024，好像可以调大，但是不方便</p>
+</blockquote>
+<h4 id="select优点">1.1. select优点</h4>
+<ul>
+<li>select() 可移植性更好，在某些Unix系统上不支持 poll() 。</li>
+<li>select() 对于超时值提供了更好的精度：微秒，而 poll() 是毫秒。</li>
+</ul>
+<h4 id="select缺点">1.2. select缺点</h4>
+<ul>
+<li>单个进程可监视的fd数量被限制。</li>
+<li>每次都需要重新将监控集合拷贝到内核（select会修改集合）。如果以万计的句柄会导致每次都要 copy 几十几百 KB 的内存到内核态，非常低效。</li>
+<li>用户需要遍历描述符是否在集合中来判断哪个描述符就绪，这个判断是一个遍历的过程，性能随着描述符增多而下降，并且复杂度更高。</li>
+<li>select每次返回都会修改监控集合，因此每次都需要用户重新向集合中添加所有描述符。</li>
+</ul>
+<h3 id="poll">2. poll</h3>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">int</span> <span class="title">poll</span> <span class="params">(struct pollfd *fds, <span class="keyword">unsigned</span> <span class="keyword">int</span> nfds, <span class="keyword">int</span> timeout)</span></span>;</span><br></pre></td></tr></table></figure>
+<p>与select不同的是，poll不需要使用3个 <code>fd_set</code> ，poll使用一个 pollfd 的指针实现。</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">struct</span> <span class="title">pollfd</span> &#123;</span></span><br><span class="line">  <span class="keyword">int</span> fd;        <span class="comment">/* file descriptor */</span></span><br><span class="line">  <span class="keyword">short</span> events;  <span class="comment">/* requested events to watch */</span></span><br><span class="line">  <span class="keyword">short</span> revents; <span class="comment">/* returned events witnessed */</span></span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+<p>每一个 pollfd 结构体指定了一个被监视的文件描述符，可以传递多个结构体，指示 poll() 监视多个文件描述符。 每个结构体的 events 域是监视该文件描述符的事件掩码，由用户来设置这个域。 revents 域是文件描述符的操作结果事件掩码，内核在调用返回时设置这个域。 events 域中请求的任何事件都可能在 revents 域中返回。</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line">POLLIN            有数据可读。</span><br><span class="line">POLLRDNORM        有普通数据可读。</span><br><span class="line">POLLRDBAND        有优先数据可读。</span><br><span class="line">POLLPRI           有紧迫数据可读。</span><br><span class="line">POLLOUT           写数据不会导致阻塞。</span><br><span class="line">POLLWRNORM        写普通数据不会导致阻塞。</span><br><span class="line">POLLWRBAND        写优先数据不会导致阻塞。</span><br><span class="line">POLLMSGSIGPOLL    消息可用</span><br><span class="line">---------------------------------------</span><br><span class="line">POLLER            指定的文件描述符发生错误。</span><br><span class="line">POLLHUP           指定的文件描述符挂起事件。</span><br><span class="line">POLLNVAL          指定的文件描述符非法。</span><br></pre></td></tr></table></figure>
+<h4 id="poll优点">2.1. poll优点</h4>
+<ul>
+<li>poll 采用事件结构形式对描述符关心的事件进行监控，简化了 select 三种集合操作的流程。</li>
+<li>poll 没有描述符上限的设置。</li>
+</ul>
+<h4 id="poll缺点">2.2. poll缺点</h4>
+<ul>
+<li>同样每次都需要将监控集合拷贝到内核。</li>
+<li>在内核中进行轮询遍历判断就绪，性能随着描述符事件增多而下降。</li>
+<li>也不会告诉用户具体哪一个描述符就绪，需要用户轮询遍历判断事件中的 revents。</li>
+</ul>
+<h3 id="epoll">3. epoll</h3>
+<h4 id="epoll_create">3.1. epoll_create</h4>
+<p>epoll使用一个文件描述符管理多个描述符，将用户关系的文件描述符的事件存放到内核的一个事件表中，这样在用户空间和内核空间的copy只需一次。</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">int</span> <span class="title">epoll_create</span><span class="params">(<span class="keyword">int</span> size)</span>；</span></span><br></pre></td></tr></table></figure>
+<p>创建一个epoll 的句柄，size 用来告诉内核这个监听的数目一共有多大，这个参数不同于 select() 中的第一个参数，给出最大监听的 fd+1 的值，参数 size 并不是限制了 epoll 所能监听的描述符最大个数，只是对内核初始分配内部数据结构的一个建议。</p>
+<p>当创建好 epoll 句柄后，它就会占用一个 fd 值。所以在使用完 epoll 后，必须调用 close() 关闭，否则可能导致 fd 被耗尽。</p>
+<p><img src="1_k-PycQSwivn-jIoEhXsvxg.png" alt="1_k-PycQSwivn-jIoEhXsvxg" /></p>
+<p>Linux 中每一个进程都有一个文件描述符的表，保存当前进程关联的文件描述符。这个表存在用户空间的。 Linux 系统空间中保存一张 “已打开的文件表”，里面保存着当前系统所有已经打开的文件。 文件系统中，每一个文件都是一个 iNode。</p>
+<p><img src="1_zwsANOj2UkICip9FhDzl_Q.png" alt="1_zwsANOj2UkICip9FhDzl_Q" /></p>
+<p>如上图所示，进程文件表中每一个 fd 关联到了 kernel 中阿的一个已经打开的文件（可能有多个 fd 指向同一个已经打开的文件）。同样的，kernel 中的已打开文件表指向了文件系统中的 iNode。</p>
+<h4 id="epoll_ctl">3.2. epoll_ctl</h4>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">int</span> <span class="title">epoll_ctl</span><span class="params">(<span class="keyword">int</span> epfd, <span class="keyword">int</span> op, <span class="keyword">int</span> fd, struct epoll_event *event)</span>；</span></span><br></pre></td></tr></table></figure>
+<p>该函数用来对指定的 socket 添加/删除/修改 需要监听的 event。</p>
+<ul>
+<li>epfd：是epoll_create()的返回值。</li>
+<li>op：表示 op 操作，用三个宏来表示：添加EPOLL_CTL_ADD，删除EPOLL_CTL_DEL，修改EPOLL_CTL_MOD</li>
+<li>fd：是需要监听的fd（文件描述符）</li>
+<li>epoll_event：是告诉内核需要监听什么事，struct epoll_event结构如下：</li>
+</ul>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">struct</span> <span class="title">epoll_event</span> &#123;</span></span><br><span class="line">  <span class="keyword">__uint32_t</span> events;  <span class="comment">/* Epoll events */</span></span><br><span class="line">  <span class="keyword">epoll_data_t</span> data;  <span class="comment">/* User data variable */</span></span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+<p>其中events表示感兴趣的事件和被触发的事件，可能的取值为：</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">EPOLLIN： 表示对应的文件描述符可以读；</span><br><span class="line">EPOLLOUT：表示对应的文件描述符可以写；</span><br><span class="line">EPOLLPRI：表示对应的文件描述符有紧急的数可读；</span><br><span class="line">--------------------------------------</span><br><span class="line">EPOLLERR：表示对应的文件描述符发生错误；</span><br><span class="line">EPOLLHUP：表示对应的文件描述符被挂断；</span><br><span class="line">EPOLLET： 设置epoll工作模式为边缘触发；</span><br></pre></td></tr></table></figure>
+<p><img src="1_Abjr5spvjK56w1p7PszWVw.jpeg" alt="1_Abjr5spvjK56w1p7PszWVw" /></p>
+<h4 id="epoll_wait">3.3. epoll_wait</h4>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">int</span> <span class="title">epoll_wait</span><span class="params">(<span class="keyword">int</span> epfd, struct epoll_event * events, <span class="keyword">int</span> maxevents, <span class="keyword">int</span> timeout)</span></span>;</span><br></pre></td></tr></table></figure>
+<p>等待 epfd上 的 io 事件，最多返回 maxevents 个事件。当监控的 fd 准备好了之后就会加入到 Ready List 中去。</p>
+<p><img src="1_24HukCwzdkH0Vb8n-RHlFw.jpeg" alt="1_24HukCwzdkH0Vb8n-RHlFw" /></p>
+<h4 id="水平触发lt">3.4. 水平触发（LT）</h4>
+<p>缺省的工作方式，并且同时支持 block 和 non-block socket。在这种做法中，内核告诉你一个文件描述符是否就绪了，然后你可以对这个就绪的 fd 进行IO操作。如果你不作任何操作，内核还是会继续通知你的，所以，这种模式编程出错误可能性要小一点。</p>
+<h4 id="边沿触发et">3.5. 边沿触发（ET）</h4>
+<p>高速工作方式，只支持 no-block socket。在这种模式下，当描述符从未就绪变为就绪时，内核通过epoll告诉你。然后它会假设你知道文件描述符已经就绪，并且不会再为那个文件描述符发送更多的就绪通知，等到下次有新的数据进来的时候才会再次出发就绪事件。</p>
+<p>采用LT模式下， 如果accept调用有返回就可以马上建立当前这个连接了，再epoll_wait等待下次通知，和select一样。</p>
+<p>但是对于ET而言，如果accpet调用有返回，除了建立当前这个连接外，不能马上就epoll_wait还需要继续循环accpet，直到返回-1，且errno==EAGAIN。</p>
+<p><strong>为什么边沿触发要配合非阻塞IO</strong></p>
+<p>因为如果是边缘触发的情况下，需要一次性把数据读完，就会调用while(read())这样的操作，在最后一次read的时候一定会被阻塞。因为阻塞式IO会在读完之后一直阻塞下去，非阻塞IO则会返回&lt;0，并让errno返回EAGAIN。</p>
+<p><a target="_blank" rel="noopener" href="https://segmentfault.com/a/1190000003063859">Linux IO模式及 select、poll、epoll详解</a></p>
+<p><a target="_blank" rel="noopener" href="http://www.gonglin91.com/linux-epoll-epoll的原理；struct-epoll_event-为什么要这样设计/">linux epoll epoll的原理；struct epoll_event 为什么要这样设计</a></p>
+<p><a target="_blank" rel="noopener" href="https://medium.com/@copyconstruct/the-method-to-epolls-madness-d9d2d6378642">The method to epoll’s madness</a></p>
+
+    </div>
+
+    
+    
+    
+
+      <div>
+    
+        <div style="text-align:center;color: #ccc;font-size:14px;">-------------本文已经结束 <i class="fa fa-paw"></i> 感谢您的阅读-------------</div>
+    
+</div>
+        <div class="reward-container">
+  <div>觉得文章对您有帮助，请我喝杯咖啡吧^_^</div>
+  <button onclick="var qr = document.getElementById('qr'); qr.style.display = (qr.style.display === 'none') ? 'block' : 'none';">
+    打赏
+  </button>
+  <div id="qr" style="display: none;">
+      
+      <div style="display: inline-block;">
+        <img src="/images/wechatpay.png" alt="Cooker 微信支付">
+        <p>微信支付</p>
+      </div>
+      
+      <div style="display: inline-block;">
+        <img src="/images/alipay.png" alt="Cooker 支付宝">
+        <p>支付宝</p>
+      </div>
+
+  </div>
+</div>
+
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/IO/" rel="tag"># IO</a>
+          </div>
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/posts/4213317268/" rel="prev" title="浅析Linux的IO模型">
+      <i class="fa fa-chevron-left"></i> 浅析Linux的IO模型
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/posts/1556292897/" rel="next" title="STL源码解析之空间配置器allocator">
+      STL源码解析之空间配置器allocator <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+
+
+          </div>
+          
+    <div class="comments" id="valine-comments"></div>
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let { activeClass } = CONFIG.comments;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-3"><a class="nav-link" href="#select"><span class="nav-text">1. select</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#select%E4%BC%98%E7%82%B9"><span class="nav-text">1.1. select优点</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#select%E7%BC%BA%E7%82%B9"><span class="nav-text">1.2. select缺点</span></a></li></ol></li><li class="nav-item nav-level-3"><a class="nav-link" href="#poll"><span class="nav-text">2. poll</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#poll%E4%BC%98%E7%82%B9"><span class="nav-text">2.1. poll优点</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#poll%E7%BC%BA%E7%82%B9"><span class="nav-text">2.2. poll缺点</span></a></li></ol></li><li class="nav-item nav-level-3"><a class="nav-link" href="#epoll"><span class="nav-text">3. epoll</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#epoll_create"><span class="nav-text">3.1. epoll_create</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#epoll_ctl"><span class="nav-text">3.2. epoll_ctl</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#epoll_wait"><span class="nav-text">3.3. epoll_wait</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#%E6%B0%B4%E5%B9%B3%E8%A7%A6%E5%8F%91lt"><span class="nav-text">3.4. 水平触发（LT）</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#%E8%BE%B9%E6%B2%BF%E8%A7%A6%E5%8F%91et"><span class="nav-text">3.5. 边沿触发（ET）</span></a></li></ol></li></ol></div>
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Cooker"
+      src="/images/avatar.jpg">
+  <p class="site-author-name" itemprop="name">Cooker</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">87</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">7</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">50</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author motion-element">
+      <span class="links-of-author-item">
+        <a href="https://github.com/iceice" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;iceice" rel="noopener" target="_blank"><i class="fab fa-github fa-fw"></i></a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:liyansong.cs@gmail.com" title="E-Mail → mailto:liyansong.cs@gmail.com" rel="noopener" target="_blank"><i class="fa fa-envelope fa-fw"></i></a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="https://weibo.com/6362780216" title="Weibo → https:&#x2F;&#x2F;weibo.com&#x2F;6362780216" rel="noopener" target="_blank"><i class="fab fa-weibo fa-fw"></i></a>
+      </span>
+  </div>
+
+
+
+      </div>
+        <div class="back-to-top motion-element">
+          <i class="fa fa-arrow-up"></i>
+          <span>0%</span>
+        </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+        
+
+<div class="copyright">
+  
+  &copy; 2018 – 
+  <span itemprop="copyrightYear">2022</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">Cooker</span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Gemini</a> 强力驱动
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/pisces.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+  
+<script src="/js/local-search.js"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+  
+
+
+<script>
+NexT.utils.loadComments(document.querySelector('#valine-comments'), () => {
+  NexT.utils.getScript('https://cdn.jsdelivr.net/npm/valine@1.4.14/dist/Valine.min.js', () => {
+    var GUEST = ['nick', 'mail', 'link'];
+    var guest = 'nick,mail,link';
+    guest = guest.split(',').filter(item => {
+      return GUEST.includes(item);
+    });
+    new Valine({
+      el         : '#valine-comments',
+      verify     : false,
+      notify     : true,
+      appId      : 'nSgEPjKtieD5Gy2XGaCj8JEy-gzGzoHsz',
+      appKey     : 'NfeWK6zro2GzDuf1i67H7UyU',
+      placeholder: "Just go go",
+      avatar     : 'mm',
+      meta       : guest,
+      pageSize   : '10' || 10,
+      visitor    : false,
+      lang       : '' || 'zh-cn',
+      path       : location.pathname,
+      recordIP   : false,
+      serverURLs : ''
+    });
+  }, window.Valine);
+});
+</script>
+
+</body>
+</html>

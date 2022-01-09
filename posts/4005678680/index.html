@@ -1,0 +1,756 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.0.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/all.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"deepcooking.cn","root":"/","scheme":"Gemini","version":"7.8.0","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":true,"scrollpercent":true},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":"valine","storage":true,"lazyload":false,"nav":null,"activeClass":"valine"},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":true,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}},"path":"search.xml"};
+  </script>
+
+  <meta name="description" content="当我们使用前馈神经网络接受输入 \(x\) 并产生输出 \(\hat{y}\) 时，信息通过网络向前流动。每一层网络都需要一个参数矩阵参数矩阵 \(W^{(l)}\) 和偏置 \(b^{(l)}\) 来计算出本层的真正输入 $ z^{(l)} $，然后经过激活函数得到 \(a^{(l)}\)(相当于之前的 \(x\) )作为下一层的输入。那么当信息在网络中流动了一遍之后，我们该如何修改每一层的参">
+<meta property="og:type" content="article">
+<meta property="og:title" content="深度学习反向传播算法">
+<meta property="og:url" content="https://deepcooking.cn/posts/4005678680/index.html">
+<meta property="og:site_name" content="Cooker&#39;s Blog">
+<meta property="og:description" content="当我们使用前馈神经网络接受输入 \(x\) 并产生输出 \(\hat{y}\) 时，信息通过网络向前流动。每一层网络都需要一个参数矩阵参数矩阵 \(W^{(l)}\) 和偏置 \(b^{(l)}\) 来计算出本层的真正输入 $ z^{(l)} $，然后经过激活函数得到 \(a^{(l)}\)(相当于之前的 \(x\) )作为下一层的输入。那么当信息在网络中流动了一遍之后，我们该如何修改每一层的参">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://deepcooking.cn/posts/4005678680/神经网络图.png">
+<meta property="og:image" content="https://deepcooking.cn/posts/4005678680/image-20190304205128762.png">
+<meta property="og:image" content="https://deepcooking.cn/posts/4005678680/image-20190304215022966.png">
+<meta property="og:image" content="https://deepcooking.cn/posts/4005678680/image-20190304214833095.png">
+<meta property="og:image" content="https://deepcooking.cn/posts/4005678680/image-20190304205128762.png">
+<meta property="article:published_time" content="2019-04-13T14:03:49.000Z">
+<meta property="article:modified_time" content="2020-01-17T15:58:17.000Z">
+<meta property="article:author" content="Cooker">
+<meta property="article:tag" content="BP算法">
+<meta property="article:tag" content="深度学习">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://deepcooking.cn/posts/4005678680/神经网络图.png">
+
+<link rel="canonical" href="https://deepcooking.cn/posts/4005678680/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome : false,
+    isPost : true,
+    lang   : 'zh-CN'
+  };
+</script>
+
+  <title>深度学习反向传播算法 | Cooker's Blog</title>
+  
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <span class="logo-line-before"><i></i></span>
+      <h1 class="site-title">Cooker's Blog</h1>
+      <span class="logo-line-after"><i></i></span>
+    </a>
+      <p class="site-subtitle" itemprop="description">Cooking & Coding</p>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+
+<nav class="site-nav">
+  <ul id="menu" class="main-menu menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-user fa-fw"></i>关于</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a>
+
+  </li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+        <div class="search-header">
+  <span class="search-icon">
+    <i class="fa fa-search"></i>
+  </span>
+  <div class="search-input-container">
+    <input autocomplete="off" autocapitalize="off"
+           placeholder="搜索..." spellcheck="false"
+           type="search" class="search-input">
+  </div>
+  <span class="popup-btn-close">
+    <i class="fa fa-times-circle"></i>
+  </span>
+</div>
+<div id="search-result">
+  <div id="no-result">
+    <i class="fa fa-spinner fa-pulse fa-5x fa-fw"></i>
+  </div>
+</div>
+
+    </div>
+  </div>
+
+</div>
+    </header>
+
+    
+
+  <a href="https://github.com/iceice" class="github-corner" title="Follow me on GitHub" aria-label="Follow me on GitHub" rel="noopener" target="_blank"><svg width="80" height="80" viewBox="0 0 250 250" aria-hidden="true"><path d="M0,0 L115,115 L130,115 L142,142 L250,250 L250,0 Z"></path><path d="M128.3,109.0 C113.8,99.7 119.0,89.6 119.0,89.6 C122.0,82.7 120.5,78.6 120.5,78.6 C119.2,72.0 123.4,76.3 123.4,76.3 C127.3,80.9 125.5,87.3 125.5,87.3 C122.9,97.6 130.6,101.9 134.4,103.2" fill="currentColor" style="transform-origin: 130px 106px;" class="octo-arm"></path><path d="M115.0,115.0 C114.9,115.1 118.7,116.5 119.8,115.4 L133.7,101.6 C136.9,99.2 139.9,98.4 142.2,98.6 C133.8,88.0 127.5,74.4 143.8,58.0 C148.5,53.4 154.0,51.2 159.7,51.0 C160.3,49.4 163.2,43.6 171.4,40.1 C171.4,40.1 176.1,42.5 178.8,56.2 C183.1,58.6 187.2,61.8 190.9,65.4 C194.5,69.0 197.7,73.2 200.1,77.6 C213.8,80.2 216.3,84.9 216.3,84.9 C212.7,93.1 206.9,96.0 205.4,96.6 C205.1,102.4 203.0,107.8 198.3,112.5 C181.9,128.9 168.3,122.5 157.7,114.1 C157.9,116.9 156.7,120.9 152.7,124.9 L141.0,136.5 C139.8,137.7 141.6,141.9 141.8,141.8 Z" fill="currentColor" class="octo-body"></path></svg></a>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content post posts-expand">
+            
+
+    
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://deepcooking.cn/posts/4005678680/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.jpg">
+      <meta itemprop="name" content="Cooker">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Cooker's Blog">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          深度学习反向传播算法
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="far fa-calendar"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2019-04-13 22:03:49" itemprop="dateCreated datePublished" datetime="2019-04-13T22:03:49+08:00">2019-04-13</time>
+            </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="far fa-folder"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/%E6%B7%B1%E5%BA%A6%E5%AD%A6%E4%B9%A0/" itemprop="url" rel="index"><span itemprop="name">深度学习</span></a>
+                </span>
+            </span>
+
+          
+  
+  <span class="post-meta-item">
+    
+      <span class="post-meta-item-icon">
+        <i class="far fa-comment"></i>
+      </span>
+      <span class="post-meta-item-text">Valine：</span>
+    
+    <a title="valine" href="/posts/4005678680/#valine-comments" itemprop="discussionUrl">
+      <span class="post-comments-count valine-comment-count" data-xid="/posts/4005678680/" itemprop="commentCount"></span>
+    </a>
+  </span>
+  
+  <br>
+            <span class="post-meta-item" title="本文字数">
+              <span class="post-meta-item-icon">
+                <i class="far fa-file-word"></i>
+              </span>
+                <span class="post-meta-item-text">本文字数：</span>
+              <span>5.3k</span>
+            </span>
+            <span class="post-meta-item" title="阅读时长">
+              <span class="post-meta-item-icon">
+                <i class="far fa-clock"></i>
+              </span>
+                <span class="post-meta-item-text">阅读时长 &asymp;</span>
+              <span>5 分钟</span>
+            </span>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <blockquote>
+<p>当我们使用前馈神经网络接受输入 <span class="math inline">\(x\)</span> 并产生输出 <span class="math inline">\(\hat{y}\)</span> 时，信息通过网络向前流动。每一层网络都需要一个参数矩阵参数矩阵 <span class="math inline">\(W^{(l)}\)</span> 和偏置 <span class="math inline">\(b^{(l)}\)</span> 来计算出本层的真正输入 $ z^{(l)} $，然后经过激活函数得到 <span class="math inline">\(a^{(l)}\)</span>(相当于之前的 <span class="math inline">\(x\)</span> )作为下一层的输入。那么当信息在网络中流动了一遍之后，我们该如何修改每一层的参数 <span class="math inline">\(W^{(l)}\)</span> 和 <span class="math inline">\(b^{(l)}\)</span> 呢？ 此时<strong>反向传播算法</strong>就应运而生了。</p>
+</blockquote>
+<span id="more"></span>
+<h3 id="前向传播">1. 前向传播</h3>
+<p>在进行正式的介绍时，我们先来对神经网络中的每个字母所代表的含义，进行一下梳理，只有明白了每个参数所代表的含义，才能更好的去理解算法本身。</p>
+<p><img src="神经网络图.png" alt="神经网络图" /></p>
+<blockquote>
+<p><span class="math inline">\(X = [x_1, x_2, x_3]^T\)</span>，首先<span class="math inline">\(X\)</span>是一个列向量，每个元素对应图中的一个小圆点。<span class="math inline">\(X\)</span>是整个网络的输入！</p>
+<p>$W^{(1)} <span class="math inline">\(,\)</span>W<sup>{(2)}<span class="math inline">\(,\)</span>W</sup>{(3)}$ 代表的是 <span class="math inline">\(l_1\)</span>, <span class="math inline">\(l_2\)</span>, <span class="math inline">\(l_3\)</span> 层的矩阵参数；<span class="math inline">\(b^{(1)}\)</span>, <span class="math inline">\(b^{(2)}\)</span>, <span class="math inline">\(b^{(3)}\)</span>代表的是偏置。</p>
+<p><span class="math inline">\(W_{21}^{(1)}\)</span> 的上角标(1)表示第一层，下角标21表示的是第2个神经元对应 <span class="math inline">\(x_1\)</span> 的的参数。</p>
+<p><span class="math inline">\(W_{12}^{(2)}\)</span> 表示的是第2层网络的第1个神经元的第2个输入。</p>
+<p><span class="math inline">\(z_2^{(1)}\)</span> 表示第1层网络的第2个神经元的输入</p>
+<p><span class="math inline">\(a_2^{(1)}\)</span> 表示第1层网络的第2个神经元经过激活函数的输出</p>
+</blockquote>
+<p>当我们知道了上面符号的含义之后，我们就会发现关键点是如何计算 <span class="math inline">\(Z\)</span> 的值 <span class="math display">\[
+\begin{aligned}
+z_1^{(1)} &amp;= w_{11}^{(1)}x_1 + w_{12}^{(1)}x_1 + w_{13}^{(1)}x_3 + b_1^{(1)} \qquad \qquad
+a_1^{(1)} = f(z_1^{(1)}) \\
+z_2^{(1)} &amp;= w_{21}^{(1)}x_1 + w_{22}^{(1)}x_1 + w_{23}^{(1)}x_3 + b_2^{(1)} \qquad \qquad
+a_2^{(1)} = f(z_2^{(1)}) \\
+z_3^{(1)} &amp;= w_{31}^{(1)}x_1 + w_{32}^{(1)}x_1 + w_{33}^{(1)}x_3 + b_3^{(1)} \qquad \qquad
+a_3^{(1)} = f(z_3^{(1)}) \\
+\end{aligned}
+\]</span> 这么整齐的式子，简直就是为了矩阵而生的！ <span class="math display">\[
+\begin{aligned}
+z^{(1)} = 
+\begin{bmatrix}
+   z_1^{(1)} \\
+   z_2^{(1)} \\
+   z_3^{(1)}
+\end{bmatrix} = 
+\begin{bmatrix}
+   w_{11}^{(1)} &amp; w_{12}^{(1)} &amp; w_{13}^{(1)} \\
+   w_{21}^{(1)} &amp; w_{22}^{(1)} &amp; w_{23}^{(1)} \\
+   w_{31}^{(1)} &amp; w_{32}^{(1)} &amp; w_{33}^{(1)}
+\end{bmatrix}
+\begin{bmatrix}
+   x_1 \\
+   x_2 \\
+   x_3
+\end{bmatrix} +
+\begin{bmatrix}
+   b_1^{(1)} \\
+   b_2^{(1)} \\
+   b_3^{(1)}
+\end{bmatrix} = 
+W^{(1)}X + b^{(1)}
+\end{aligned}
+\]</span> 然后，就有了 <span class="math display">\[
+\begin{aligned}
+z^{(2)} = 
+\begin{bmatrix}
+   z_1^{(2)} \\
+   z_2^{(2)} \\
+\end{bmatrix} = 
+\begin{bmatrix}
+   w_{11}^{(2)} &amp; w_{12}^{(2)} &amp; w_{13}^{(2)} \\
+   w_{21}^{(2)} &amp; w_{22}^{(2)} &amp; w_{23}^{(2)} \\
+\end{bmatrix}
+\begin{bmatrix}
+   a_1^{(1)} \\
+   a_2^{(1)} \\
+   a_3^{(1)}
+\end{bmatrix} +
+\begin{bmatrix}
+   b_1^{(2)} \\
+   b_2^{(2)} \\
+   b_3^{(2)}
+\end{bmatrix} = 
+W^{(2)}a^{(1)} + b^{(2)}
+\end{aligned}
+\]</span> 即： <span class="math display">\[
+\begin{aligned}
+a^{(1)} &amp;= f(z^{(1)}) = f(W^{(1)}X + b^{(1)}) \\
+a^{(2)} &amp;= f(z^{(2)}) = f(W^{(2)}a^{(1)} + b^{(2)}) \\
+\end{aligned}
+\]</span> 总之， <span class="math display">\[
+z^{(l)} = W^{(l)}a^{(l-1)} + b^{(l)} \qquad \qquad \qquad a^{(l)} = f(z^{(l)})
+\]</span> 上面的公式总结为：输入的 <span class="math inline">\(x\)</span> 提供一个初始的向量，经过第 <span class="math inline">\(l\)</span> 层的参数矩阵 <span class="math inline">\(W^{(l)}\)</span> 和偏置 <span class="math inline">\(b^{(l)}\)</span> 计算得到了第 <span class="math inline">\(l\)</span> 层的输入 $Z^{(l)} $，然后 <span class="math inline">\(Z^{(l)}\)</span> 中的每个值都要经过激活函数 <span class="math inline">\(f(·)\)</span> 产生第 <span class="math inline">\(l\)</span> 层的输出，最后把输出与 <span class="math inline">\(W^{(l+1)}\)</span> 和 <span class="math inline">\(b^{(l+1)}\)</span> 计算得到第 <span class="math inline">\(l+1\)</span> 层的输入 <span class="math inline">\(Z^{(l+1)}\)</span>，然后再一次的经过激活函数 <span class="math inline">\(f(·)\)</span> 产生第 <span class="math inline">\(l+1\)</span>层的输出，如此循环往复的过程称作前向传播。</p>
+<h3 id="反向传播">2. 反向传播</h3>
+<p>每一轮需要更新的参数是 <span class="math inline">\(W^{(l)}\)</span> 和 <span class="math inline">\(b^{(l)}\)</span>，从数学的角度上面来说就是使用梯度下降法来求解。最暴力的解法就是针对每一个 <span class="math inline">\(w_{ji}^{(l)}\)</span> 求它的偏导，但是这种暴力的算法存在大量的重复计算过程，所以反向传播算法就应运而生。我们把上面那幅图中的标红的线路拿出来，单独的去看它。</p>
+<p><img src="image-20190304205128762.png" alt="image-20190304205128762" /></p>
+<p>注意：一定要理解这条线和上面图中的红线的对应关系</p>
+<p>假如，我们要求 <span class="math inline">\(J(W, b)\)</span> 关于 <span class="math inline">\(w_{ji}^{(l)}\)</span> 的偏导，仔细观察上图<strong>蓝色部分</strong></p>
+<blockquote>
+<p><span class="math inline">\(w_{ji}^{(l)}\)</span> 首先变成了 <span class="math inline">\(z_j^{(l)}\)</span>，然后向后传播到 <span class="math inline">\(J(W, b)\)</span></p>
+</blockquote>
+<p>我们先不管它怎么传播过去的，针对 <span class="math inline">\(w_{ji}^{(l)}\)</span> 、 <span class="math inline">\(z_j^{(l)}\)</span> 和 <span class="math inline">\(J(W, b)\)</span> 它们三个的关系，我们来应用<strong>链式法则</strong>。</p>
+<p>由前向传播过程可知：$ z_{j}^{(l)} = <em>{i = 1}<sup>{n_{l-1}}w_{ji}</sup>{(l)} a</em>{i}^{(l-1)} + b_{j}^{(l)} $ <span class="math display">\[
+\begin{aligned}
+\frac{\partial J(W,b)}{\partial w_{ji}^{(l)}} &amp;= \frac{\partial J(W,b)}{\partial z_j^{(l)}}
+\frac{\partial z_j^{(l)}}{\partial w_{ji}^{(l)}} = \frac{\partial J(W,b)}{\partial z_j^{(l)}} a_i^{(l-1)} \\
+\frac{\partial J(W,b)}{\partial b_{j}^{(l)}} &amp;= \frac{\partial J(W,b)}{\partial z_j^{(l)}}
+\frac{\partial z_j^{(l)}}{\partial b_{j}^{(l)}} = \frac{\partial J(W,b)}{\partial z_j^{(l)}}
+\end{aligned}
+\]</span> 所以，我们的任务变成了：如何求 <span class="math inline">\(\frac{\partial J(W,b)}{\partial z_j^{(l)}}\)</span> ，我们设 <span class="math display">\[
+\delta_j^{(l)} = \frac{\partial J(W,b)}{\partial z_j^{(l)}}
+\]</span> <img src="image-20190304215022966.png" alt="image-20190304215022966" /></p>
+<p>继续观察上面的图，可以发现：<span class="math inline">\(z_j^{(l)} \to a_j^{(l)} \to z_k^{(l+1)}\)</span></p>
+<p>又因为：$ z_k^{(l+1)} = _{j = 1}<sup>{n_{l}}w_{kj}</sup>{(l+1)} a_j^{(l)} + b_k^{(l+1)} $ ，另外我们需要注意 <span class="math inline">\(a_j^{(l)}\)</span> 与 <span class="math inline">\(l+1\)</span> 层的所有 <span class="math inline">\(z\)</span> 都有关系，所以 <span class="math display">\[
+\begin{aligned}
+\delta_j^{(l)} = \frac{\partial J(W,b)}{\partial z_j^{(l)}}
+&amp;= \sum_{k=1}^{n_{l+1}}
+\frac{\partial J(W,b)}{\partial z_k^{(l+1)}}
+\frac{\partial z_k^{(l+1)}}{\partial a_j^{(l)}}
+\frac{\partial a_j^{(l)}}{\partial z_j^{(l)}} \\
+&amp;= \sum_{k=1}^{n_{l+1}}
+\frac{\partial J(W,b)}{\partial z_k^{(l+1)}}
+w_{kj}^{(l+1)} f&#39;(z_j^{(l)}) \\
+&amp;= \sum_{k=1}^{n_{l+1}} \delta_k^{(l+1)} w_{kj}^{(l+1)} f&#39;(z_j^{(l)})
+\end{aligned}
+\]</span></p>
+<p>对于最后一层</p>
+<p><img src="image-20190304214833095.png" alt="image-20190304214833095" /> <span class="math display">\[
+\delta_p^{(L)} = \frac{\partial J(W,b)}{\partial z_p^{(L)}}
+= \frac{\partial J(W,b)}{\partial a_p^{(L)}} \frac{\partial a_p^{(L)}}{\partial z_p^{(L)}}
+= \frac{\partial J(W,b)}{\partial a_p^{(L)}} f&#39;(z_p^{(L)})
+\]</span></p>
+<h3 id="总结">3. 总结</h3>
+<p>有了上面的推导，反向传播算法的计算流程如下：</p>
+<p><img src="image-20190304205128762.png" alt="image-20190304205128762" /></p>
+<p>Step-1：依据前向传播算法求解每一层的激活值 <span class="math display">\[
+z^{(l)} = W^{(l)}a^{(l-1)} + b^{(l)} \qquad \qquad a^{(l)} = f(z^{(l)})
+\]</span> Step-2：计算出最后一层 (L 层) 的<strong>每个</strong>神经元的 <span class="math inline">\(\delta_p^{(L)}\)</span> <span class="math display">\[
+\delta_p^{(L)} = \frac{\partial J(W,b)}{\partial z_p^{(L)}}
+= \frac{\partial J(W,b)}{\partial a_p^{(L)}} f&#39;(z_p^{(L)})
+\]</span> Step-3：由后向前，依次计算出各 <span class="math inline">\(l\)</span> 层的各个神经元的 <span class="math inline">\(\delta_j^{(l)}\)</span> <span class="math display">\[
+\delta_j^{(l)} = \sum_{k=1}^{n_{l+1}} \delta_k^{(l+1)} w_{kj}^{(l+1)} f&#39;(z_j^{(l)})
+\]</span> Step-4：计算出各 <span class="math inline">\(l\)</span> 层的各个权重 $w_{ji}^{(l)} $ 的梯度及各个偏置 <span class="math inline">\(b_i^{(l)}\)</span> 的梯度 <span class="math display">\[
+\begin{aligned}
+\frac{\partial J(W,b)}{\partial w_{ji}^{(l)}} &amp;= \delta_j^{(l)}a_i^{(l-1)} \\
+\frac{\partial J(W,b)}{\partial b_{j}^{(l)}} &amp;= \delta_j^{(l)}
+\end{aligned}
+\]</span> Step-5：对各 <span class="math inline">\(l\)</span> 层的各个权重 $w_{ji}^{(l)} $ 的梯度及各个偏置 <span class="math inline">\(b_i^{(l)}\)</span> 的梯度进行更新，直到代价函数 <span class="math inline">\(J(W,b)\)</span> 足够小 <span class="math display">\[
+\begin{aligned}
+w_{ji}^{(l)} &amp;= w_{ji}^{(l)} - \alpha \frac{\partial J(W,b)}{\partial w_{ji}^{(l)}} \\
+b_j^{(l)} &amp;= b_j^{(l)} - \alpha \frac{\partial J(W,b)}{\partial b_j^{(l)}}
+\end{aligned}
+\]</span> 反向传播的最核心算式： <span class="math display">\[
+\begin{aligned}
+w_{ji}^{(l)} &amp;= w_{ji}^{(l)} - \alpha \frac{\partial J(W,b)}{\partial w_{ji}^{(l)}} \\
+&amp;= w_{ji}^{(l)} - \alpha \frac{\partial J(W,b)}{\partial z_j^{(l)}}
+\frac{\partial z_j^{(l)}}{\partial w_{ji}^{(l)}} \\
+&amp;= w_{ji}^{(l)} - \alpha \frac{\partial J(W,b)}{\partial z_j^{(l)}} a_i^{(l-1)} \\
+&amp;= w_{ji}^{(l)} - \alpha \bigg( \sum_{k=1}^{n_{l+1}} \delta_k^{(l+1)} w_{kj}^{(l+1)} f&#39;(z_j^{(l)}) \bigg) a_i^{(l-1)}
+\end{aligned}
+\]</span></p>
+
+    </div>
+
+    
+    
+    
+
+      <div>
+    
+        <div style="text-align:center;color: #ccc;font-size:14px;">-------------本文已经结束 <i class="fa fa-paw"></i> 感谢您的阅读-------------</div>
+    
+</div>
+        <div class="reward-container">
+  <div>觉得文章对您有帮助，请我喝杯咖啡吧^_^</div>
+  <button onclick="var qr = document.getElementById('qr'); qr.style.display = (qr.style.display === 'none') ? 'block' : 'none';">
+    打赏
+  </button>
+  <div id="qr" style="display: none;">
+      
+      <div style="display: inline-block;">
+        <img src="/images/wechatpay.png" alt="Cooker 微信支付">
+        <p>微信支付</p>
+      </div>
+      
+      <div style="display: inline-block;">
+        <img src="/images/alipay.png" alt="Cooker 支付宝">
+        <p>支付宝</p>
+      </div>
+
+  </div>
+</div>
+
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/BP%E7%AE%97%E6%B3%95/" rel="tag"># BP算法</a>
+              <a href="/tags/%E6%B7%B1%E5%BA%A6%E5%AD%A6%E4%B9%A0/" rel="tag"># 深度学习</a>
+          </div>
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/posts/2837359218/" rel="prev" title="Git学习笔记">
+      <i class="fa fa-chevron-left"></i> Git学习笔记
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/posts/835479121/" rel="next" title="深度学习训练方法对比">
+      深度学习训练方法对比 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+
+
+          </div>
+          
+    <div class="comments" id="valine-comments"></div>
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let { activeClass } = CONFIG.comments;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E5%89%8D%E5%90%91%E4%BC%A0%E6%92%AD"><span class="nav-text">1. 前向传播</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E5%8F%8D%E5%90%91%E4%BC%A0%E6%92%AD"><span class="nav-text">2. 反向传播</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E6%80%BB%E7%BB%93"><span class="nav-text">3. 总结</span></a></li></ol></div>
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Cooker"
+      src="/images/avatar.jpg">
+  <p class="site-author-name" itemprop="name">Cooker</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">87</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">7</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">50</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author motion-element">
+      <span class="links-of-author-item">
+        <a href="https://github.com/iceice" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;iceice" rel="noopener" target="_blank"><i class="fab fa-github fa-fw"></i></a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:liyansong.cs@gmail.com" title="E-Mail → mailto:liyansong.cs@gmail.com" rel="noopener" target="_blank"><i class="fa fa-envelope fa-fw"></i></a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="https://weibo.com/6362780216" title="Weibo → https:&#x2F;&#x2F;weibo.com&#x2F;6362780216" rel="noopener" target="_blank"><i class="fab fa-weibo fa-fw"></i></a>
+      </span>
+  </div>
+
+
+
+      </div>
+        <div class="back-to-top motion-element">
+          <i class="fa fa-arrow-up"></i>
+          <span>0%</span>
+        </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+        
+
+<div class="copyright">
+  
+  &copy; 2018 – 
+  <span itemprop="copyrightYear">2022</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">Cooker</span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Gemini</a> 强力驱动
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/pisces.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+  
+<script src="/js/local-search.js"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+      
+
+<script>
+  if (typeof MathJax === 'undefined') {
+    window.MathJax = {
+      loader: {
+        source: {
+          '[tex]/amsCd': '[tex]/amscd',
+          '[tex]/AMScd': '[tex]/amscd'
+        }
+      },
+      tex: {
+        inlineMath: {'[+]': [['$', '$']]},
+        tags: 'ams'
+      },
+      options: {
+        renderActions: {
+          findScript: [10, doc => {
+            document.querySelectorAll('script[type^="math/tex"]').forEach(node => {
+              const display = !!node.type.match(/; *mode=display/);
+              const math = new doc.options.MathItem(node.textContent, doc.inputJax[0], display);
+              const text = document.createTextNode('');
+              node.parentNode.replaceChild(text, node);
+              math.start = {node: text, delim: '', n: 0};
+              math.end = {node: text, delim: '', n: 0};
+              doc.math.push(math);
+            });
+          }, '', false],
+          insertedScript: [200, () => {
+            document.querySelectorAll('mjx-container').forEach(node => {
+              let target = node.parentNode;
+              if (target.nodeName.toLowerCase() === 'li') {
+                target.parentNode.classList.add('has-jax');
+              }
+            });
+          }, '', false]
+        }
+      }
+    };
+    (function () {
+      var script = document.createElement('script');
+      script.src = '//cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js';
+      script.defer = true;
+      document.head.appendChild(script);
+    })();
+  } else {
+    MathJax.startup.document.state(0);
+    MathJax.texReset();
+    MathJax.typeset();
+  }
+</script>
+
+    
+
+  
+
+
+<script>
+NexT.utils.loadComments(document.querySelector('#valine-comments'), () => {
+  NexT.utils.getScript('https://cdn.jsdelivr.net/npm/valine@1.4.14/dist/Valine.min.js', () => {
+    var GUEST = ['nick', 'mail', 'link'];
+    var guest = 'nick,mail,link';
+    guest = guest.split(',').filter(item => {
+      return GUEST.includes(item);
+    });
+    new Valine({
+      el         : '#valine-comments',
+      verify     : false,
+      notify     : true,
+      appId      : 'nSgEPjKtieD5Gy2XGaCj8JEy-gzGzoHsz',
+      appKey     : 'NfeWK6zro2GzDuf1i67H7UyU',
+      placeholder: "Just go go",
+      avatar     : 'mm',
+      meta       : guest,
+      pageSize   : '10' || 10,
+      visitor    : false,
+      lang       : '' || 'zh-cn',
+      path       : location.pathname,
+      recordIP   : false,
+      serverURLs : ''
+    });
+  }, window.Valine);
+});
+</script>
+
+</body>
+</html>
