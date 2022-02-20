@@ -31,7 +31,7 @@
 <meta property="og:image" content="https://deepcooking.cn/posts/2854637860/image-20220220173442910.png">
 <meta property="og:image" content="https://deepcooking.cn/posts/2854637860/image-20220220181911788.png">
 <meta property="article:published_time" content="2022-02-20T05:48:30.000Z">
-<meta property="article:modified_time" content="2022-02-20T15:22:05.521Z">
+<meta property="article:modified_time" content="2022-02-20T15:44:54.439Z">
 <meta property="article:author" content="Cooker">
 <meta property="article:tag" content="LevelDB">
 <meta name="twitter:card" content="summary">
@@ -295,7 +295,7 @@
 <h4 id="findpointer">3.1. FindPointer</h4>
 <p>LevelDB的哈希表实现中，最优雅的写法就是用了二维指针，将链表的插入、修改、删除操作变得十分简单。FindPointer作为一个辅助函数，其功能就是找到对应Key的LRUHandle并且返回一个<strong>指向该LRUHandle的指针的指针</strong>，这里一定要明白这个指针的指针，如果有疑问，根据上面的图片，自己模拟下寻找的过程，就能更好的理解了。</p>
 <figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="function">LRUHandle** <span class="title">FindPointer</span><span class="params">(<span class="keyword">const</span> Slice&amp; key, <span class="keyword">uint32_t</span> hash)</span> </span>&#123;</span><br><span class="line">  LRUHandle** ptr = &amp;list_[hash &amp; (length_ - <span class="number">1</span>)];</span><br><span class="line">  <span class="keyword">while</span> (*ptr != <span class="literal">nullptr</span> &amp;&amp; ((*ptr)-&gt;hash != hash || key != (*ptr)-&gt;<span class="built_in">key</span>())) &#123;</span><br><span class="line">  	ptr = &amp;(*ptr)-&gt;next_hash;</span><br><span class="line">  &#125;</span><br><span class="line">  <span class="keyword">return</span> ptr;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<p>另外，这里与一个小技巧，当哈希表的大小时<span class="math inline">\(2^n\)</span>时，<code>hash &amp; (length_ -1)</code> 相当于 <code>hash % length_</code> ，并且速度要更快。</p>
+<p>另外，这里有一个小技巧，当哈希表的大小时 <span class="math inline">\(2^n\)</span> 时，<code>hash &amp; (length_ -1)</code> 相当于 <code>hash % length_</code> ，并且速度要更快。</p>
 <h4 id="resize">3.2. Resize</h4>
 <p>对于一个哈希表，在扩容的时候有两个常见的选择：1）选用一个素数，这样可以保证最小的冲突；2）使用 <span class="math inline">\(2^n\)</span> ，这样可以使用 <code>hash &amp; (length_ -1)</code> 优化。LevelDB采用的就是后者，在Resize的时候，遍历原有的所有元素，重新哈希到对应的桶内，如果遇到冲突，采用头插法插入到对应桶的链表中。</p>
 <figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">Resize</span><span class="params">()</span> </span>&#123;</span><br><span class="line">  <span class="keyword">uint32_t</span> new_length = <span class="number">4</span>;</span><br><span class="line">  <span class="keyword">while</span> (new_length &lt; elems_) &#123;</span><br><span class="line">    new_length *= <span class="number">2</span>;</span><br><span class="line">  &#125;</span><br><span class="line">  LRUHandle** new_list = <span class="keyword">new</span> LRUHandle*[new_length];</span><br><span class="line">  <span class="built_in">memset</span>(new_list, <span class="number">0</span>, <span class="built_in"><span class="keyword">sizeof</span></span>(new_list[<span class="number">0</span>]) * new_length);</span><br><span class="line">  <span class="keyword">uint32_t</span> count = <span class="number">0</span>;</span><br><span class="line">  <span class="keyword">for</span> (<span class="keyword">uint32_t</span> i = <span class="number">0</span>; i &lt; length_; i++) &#123;</span><br><span class="line">    LRUHandle* h = list_[i];</span><br><span class="line">    <span class="keyword">while</span> (h != <span class="literal">nullptr</span>) &#123;</span><br><span class="line">      LRUHandle* next = h-&gt;next_hash;</span><br><span class="line">      <span class="keyword">uint32_t</span> hash = h-&gt;hash;</span><br><span class="line">      LRUHandle** ptr = &amp;new_list[hash &amp; (new_length - <span class="number">1</span>)];</span><br><span class="line">      h-&gt;next_hash = *ptr;</span><br><span class="line">      *ptr = h;</span><br><span class="line">      h = next;</span><br><span class="line">      count++;</span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br><span class="line">  <span class="built_in">assert</span>(elems_ == count);</span><br><span class="line">  <span class="keyword">delete</span>[] list_;</span><br><span class="line">  list_ = new_list;</span><br><span class="line">  length_ = new_length;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
@@ -624,6 +624,59 @@
   
 
   
+      
+
+<script>
+  if (typeof MathJax === 'undefined') {
+    window.MathJax = {
+      loader: {
+        source: {
+          '[tex]/amsCd': '[tex]/amscd',
+          '[tex]/AMScd': '[tex]/amscd'
+        }
+      },
+      tex: {
+        inlineMath: {'[+]': [['$', '$']]},
+        tags: 'ams'
+      },
+      options: {
+        renderActions: {
+          findScript: [10, doc => {
+            document.querySelectorAll('script[type^="math/tex"]').forEach(node => {
+              const display = !!node.type.match(/; *mode=display/);
+              const math = new doc.options.MathItem(node.textContent, doc.inputJax[0], display);
+              const text = document.createTextNode('');
+              node.parentNode.replaceChild(text, node);
+              math.start = {node: text, delim: '', n: 0};
+              math.end = {node: text, delim: '', n: 0};
+              doc.math.push(math);
+            });
+          }, '', false],
+          insertedScript: [200, () => {
+            document.querySelectorAll('mjx-container').forEach(node => {
+              let target = node.parentNode;
+              if (target.nodeName.toLowerCase() === 'li') {
+                target.parentNode.classList.add('has-jax');
+              }
+            });
+          }, '', false]
+        }
+      }
+    };
+    (function () {
+      var script = document.createElement('script');
+      script.src = '//cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js';
+      script.defer = true;
+      document.head.appendChild(script);
+    })();
+  } else {
+    MathJax.startup.document.state(0);
+    MathJax.texReset();
+    MathJax.typeset();
+  }
+</script>
+
+    
 
   
 
